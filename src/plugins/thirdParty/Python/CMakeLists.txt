@@ -3,7 +3,7 @@ project(PythonPlugin)
 # Name and version of our package
 
 set(PACKAGE_NAME Python)
-set(PACKAGE_VERSION 3.7.4)
+set(PACKAGE_VERSION 3.7.5)
 
 # Package repository and release tag
 
@@ -12,12 +12,12 @@ set(PACKAGE_REPOSITORY python)
 # Version of our library
 
 set(MAJOR_MINOR_LIBRARY_VERSION "3.7")
-set(LIBRARY_VERSION "${MAJOR_MINOR_LIBRARY_VERSION}.4")
+set(LIBRARY_VERSION "${MAJOR_MINOR_LIBRARY_VERSION}.5")
 set(NUMERIC_LIBRARY_VERSION 37)
 
 # Git tag of our Python sources
 
-set(GIT_TAG "win-debug")
+set(GIT_TAG "opencor-3.7.5")
 # Note: see https://github.com/opencor/opencor/pull/2160#issuecomment-541552006
 #       for the rationale behind using "win-debug" rather than "opencor"...
 
@@ -60,16 +60,16 @@ endif()
 # The base Python directory, library and script directories
 
 if(WIN32)
-    set(ROOT_DIR ${FULL_DEST_EXTERNAL_BINARIES_DIR}/../Python)
+    set(ROOT_DIR ${FULL_DEST_EXTERNAL_LIBRARIES_DIR}/../Python)
 
     set(LIBRARY_DIR Libs)
     set(RUNTIME_DIR lib)
     set(SCRIPT_DIR Scripts)
 else()
     if (APPLE)
-        set(ROOT_DIR ${FULL_DEST_EXTERNAL_BINARIES_DIR}/Python)
+        set(ROOT_DIR ${FULL_DEST_EXTERNAL_LIBRARIES_DIR}/Python)
     else()
-        set(ROOT_DIR ${FULL_DEST_EXTERNAL_BINARIES_DIR}/../python)
+        set(ROOT_DIR ${FULL_DEST_EXTERNAL_LIBRARIES_DIR}/../python)
     endif()
 
     set(LIBRARY_DIR lib)
@@ -150,39 +150,39 @@ if(USE_PREBUILT_PYTHON_PACKAGE)
     if(WIN32)
         if(RELEASE_MODE)
             retrieve_package_file(${PACKAGE_NAME} ${PACKAGE_VERSION}
-                                  ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} 20a1f97e88200d921f0fdf65672057847d862324
+                                  ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} fd8dcee8b7f7fedf3fe6a9a43b014f3628242dce
                                   PACKAGE_REPOSITORY ${PACKAGE_REPOSITORY}
                                   SHA1_FILES ${SHA1_FILES}
-                                  SHA1_VALUES 2f3b3c11eded6b6cf6bf7b634ff005381e2b4c51
-                                              1fe026d62a44a87c93ef0db9f7d88fec9e8aae17
+                                  SHA1_VALUES f0b762be7224e56285fec628f5bac4a7f2201af6
+                                              a461f7c8aeb6d3a1751a612d1d2f8c48ebc816a5
                                               599a6df061280855fad67d7c775c242345b0bb2d
                                               3970ffe8aefe0c30daaec65b85fb103c0fc0f2a7
-                                              c6dc60139290f9490424c9db8a98ebc1a53a8109)
+                                              d97ae6971535d9084d274010d0609a5ea5a875b6)
         else()
             retrieve_package_file(${PACKAGE_NAME} ${PACKAGE_VERSION}
-                                  ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} 9d39f951a6c9d4daf51bc984aa97f9061fada1f5
+                                  ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} c442fa72b2fcca31397e623599174225eaaa2bb0
                                   PACKAGE_REPOSITORY ${PACKAGE_REPOSITORY}
                                   SHA1_FILES ${SHA1_FILES}
-                                  SHA1_VALUES f5a021b9a59679a8b199ab5681b4bc46a651fe22
-                                              ca878b8928c178f4ba213acb2432f52c3275d686
+                                  SHA1_VALUES 182cbbb471839645375635eae35157e6eb9616d8
+                                              69b38abf688e21fd0c77c3028a9f46836b026610
                                               7314ef1eb91964755ebc5f3d3544935b2b5cb1c0
                                               3970ffe8aefe0c30daaec65b85fb103c0fc0f2a7
-                                              08244a339c1ece575aecb617e9a11261f1e278cc)
+                                              5a44762132b1133d9a70785b09bfc05a2e20eb75)
         endif()
     elseif(APPLE)
         retrieve_package_file(${PACKAGE_NAME} ${PACKAGE_VERSION}
-                              ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} 13486dfa12684430772351e9f84df32338731446
+                              ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} 5a833cd4337e8058331c3817dd19887ff891228b
                               PACKAGE_REPOSITORY ${PACKAGE_REPOSITORY}
                               SHA1_FILES ${SHA1_FILES}
                               SHA1_VALUES 9df0883f363d9236d0e448022992c7af43259a8d
-                                          9ffed03139f65ae1ec8363db5a24aa75046bb74b)
+                                          4ee6d01c677964b6153067e8f23931369ced3abf)
     else()
         retrieve_package_file(${PACKAGE_NAME} ${PACKAGE_VERSION}
-                              ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} dadb743d6d94a1d3b9693159d6cbf756ca6b04c1
+                              ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} 215dfd8b1828367bbb23fb7905d95293b8dac717
                               PACKAGE_REPOSITORY ${PACKAGE_REPOSITORY}
                               SHA1_FILES ${SHA1_FILES}
-                              SHA1_VALUES ecc5e3a1015fdb780bbd43cef33f4d3d34326f21
-                                          0b9a8b76c8044c9949d4a3a16c08b536daacb4e8
+                              SHA1_VALUES 64a4e7209f41144c49809e53d9b2a51b27e69b12
+                                          37a3419ed34a7bcb1f1c72d19210062ebbd8b931
                                           561eee6b2f229c953eae711f40b25e834fb1124a)
     endif()
 else()
@@ -277,10 +277,6 @@ else()
     endif()
 
     # Build Python as an external project
-    # Note: see https://github.com/opencor/opencor/pull/2160#issuecomment-541552006
-    #       for the rationale behind using
-    #       https://github.com/dbrnz/python-cmake-buildsystem.git rather than
-    #       https://github.com/opencor/python-cmake-buildsystem.git...
 
     set(PACKAGE_BUILD ${PACKAGE_NAME}Build)
     set(PACKAGE_BUILD_DIR ${CMAKE_SOURCE_DIR}/ext/${PACKAGE_NAME})
@@ -294,7 +290,7 @@ else()
         INSTALL_DIR
             ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR}
         GIT_REPOSITORY
-            https://github.com/dbrnz/python-cmake-buildsystem.git
+            https://github.com/opencor/python-cmake-buildsystem.git
         GIT_TAG
             ${GIT_TAG}
         CMAKE_GENERATOR
@@ -429,7 +425,7 @@ else()
         #    location.
 
         ExternalProject_Add_Step(${PACKAGE_BUILD} setRpath
-                                 COMMAND install_name_tool -add_rpath ${FULL_DEST_EXTERNAL_BINARIES_DIR} ${PYTHON_EXECUTABLE}
+                                 COMMAND install_name_tool -add_rpath ${FULL_DEST_EXTERNAL_LIBRARIES_DIR} ${PYTHON_EXECUTABLE}
                                  COMMAND install_name_tool -add_rpath @executable_path/.. ${PYTHON_EXECUTABLE}
                                  COMMAND install_name_tool -add_rpath @executable_path/../.. ${PYTHON_EXECUTABLE}
                                  COMMAND install_name_tool -change ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR}/lib/${SHARED_LIBRARY}

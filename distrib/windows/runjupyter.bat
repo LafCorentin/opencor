@@ -2,8 +2,8 @@
 
 TITLE Running the Jupyter environment...
 
-SET appDir=%~dp0
+SET AppDir=%~dp0..\..\
 
-CALL "%appDir%setpythonpath.bat"
+"%AppDir%Python\bin\Python.exe" "%AppDir%Python\Scripts\set_python_path.py" "%AppDir%Python" -s
 
-"%appDir%Python\bin\Python.exe" "%appDir%Python\Scripts\start_jupyter.py" %*
+"%AppDir%Python\bin\Python.exe" "%AppDir%Python\Scripts\start_jupyter.py" %*
