@@ -142,7 +142,7 @@ WebBrowserWindowWindow::WebBrowserWindowWindow(QWidget *pParent) :
 #if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
     mGui->layout->addWidget(new Core::BorderedWidget(mWebBrowserWindowWidget,
                                                      true, true, true, true));
-#elif defined(Q_OS_MAC)
+#else
     mGui->layout->addWidget(new Core::BorderedWidget(mWebBrowserWindowWidget,
                                                      true, false, false, false));
 #endif
@@ -257,13 +257,6 @@ void WebBrowserWindowWindow::saveSettings(QSettings &pSettings) const
     pSettings.beginGroup(mWebBrowserWindowWidget->objectName());
         mWebBrowserWindowWidget->saveSettings(pSettings);
     pSettings.endGroup();
-}
-
-//==============================================================================
-
-WebBrowserWindowWidget * WebBrowserWindowWindow::widget() const
-{
-    return mWebBrowserWindowWidget;
 }
 
 //==============================================================================

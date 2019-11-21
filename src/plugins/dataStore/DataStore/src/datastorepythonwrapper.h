@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *******************************************************************************/
 
 //==============================================================================
-// Python wrapper for DataStore classes
+// Data store Python wrapper
 //==============================================================================
 
 #pragma once
@@ -27,11 +27,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "datastoreglobal.h"
 #include "datastoreinterface.h"
-#include "simulationsupportpythonwrapper.h"
+#include "simulation.h"
 
 //==============================================================================
 
 #include <QObject>
+
+//==============================================================================
+
+#include "pythonbegin.h"
+    #include "PythonQt/PythonQtPythonInclude.h"
+#include "pythonend.h"
 
 //==============================================================================
 
@@ -45,13 +51,11 @@ class DataStorePythonWrapper : public QObject
     Q_OBJECT
 
 public:
-    explicit DataStorePythonWrapper(PyObject *pModule, QObject *pParent);
+    explicit DataStorePythonWrapper(void *pModule, QObject *pParent);
 
-    static PyTypeObject DataStoreValuesDict_Type;
-
-    static DATASTORE_EXPORT PyObject *dataStoreValuesDict(const DataStoreValues *pDataStoreValues,
-                                                          SimulationSupport::SimulationDataUpdatedFunction *pSimulationDataUpdatedFunction = nullptr);
-    static DATASTORE_EXPORT PyObject *dataStoreVariablesDict(const DataStoreVariables &pDataStoreVariables);
+    static DATASTORE_EXPORT PyObject * dataStoreValuesDict(const DataStoreValues *pDataStoreValues,
+                                                           SimulationSupport::SimulationDataUpdatedFunction *pSimulationDataUpdatedFunction);
+    static DATASTORE_EXPORT PyObject * dataStoreVariablesDict(const DataStoreVariables &pDataStoreVariables);
 
 public slots:
     double value(OpenCOR::DataStore::DataStoreVariable *pDataStoreVariable,

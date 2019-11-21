@@ -866,6 +866,14 @@ if(USE_PREBUILT_QTWEBKIT_PACKAGE)
     if(USE_PREBUILT_PYTHON_PACKAGE)
         # We are using the prebuilt version of our Python package, so build all
         # our plugins
+        # Note: on Windows, it's technically very difficult, if not impossible,
+        #       to get a debug version of our PythonConsole window, so we skip
+        #       it in that case (see
+        #       https://github.com/opencor/opencor/issues/1255#issuecomment-550605710)...
+
+        if(RELEASE_MODE OR NOT WIN32)
+            set(MISCELLANEOUS_PYTHONCONSOLEWINDOW miscellaneous/PythonConsoleWindow)
+        endif()
 
         list(APPEND PLUGINS
             thirdParty/libSBML
@@ -889,7 +897,7 @@ if(USE_PREBUILT_QTWEBKIT_PACKAGE)
             miscellaneous/Core
             miscellaneous/HelpWindow
             miscellaneous/JupyterKernel
-            miscellaneous/PythonConsoleWindow
+            ${MISCELLANEOUS_PYTHONCONSOLEWINDOW}
             miscellaneous/PythonShell
             miscellaneous/WebBrowserWindow
 
@@ -1057,9 +1065,8 @@ endif()
 
 # On Linux, our Python package needs to be directly linked to OpenCOR otherwise
 # Python extension DSOs can't find symbols
-# Note: this is because the lookup scope changes for DSOs that are loaded
-#       using dlopen()...
-#       (See https://www.akkadia.org/drepper/dsohowto.pdf)
+# Note: this is because the lookup scope changes for DSOs that are loaded using
+#       dlopen() (see https://www.akkadia.org/drepper/dsohowto.pdf)...
 
 if(NOT WIN32 AND NOT APPLE)
     include_directories(${PYTHON_INCLUDE_DIR})
@@ -1333,30 +1340,40 @@ if(WIN32)
             DESTINATION .)
 
     # Batch files to setup and run Python and Jupyter
+    # Note: on Windows, it's technically very difficult, if not impossible, to
+    #       get a debug version of any of our Jupyter-related scripts, so we
+    #       skip them in that case (see
+    #       https://github.com/opencor/opencor/issues/1255#issuecomment-550605710)...
 
-    copy_file_to_build_dir(DIRECT ${PLATFORM_DISTRIB_DIR} ${RELATIVE_PYTHON_SCRIPT_DIR} runjupyter.bat)
-    copy_file_to_build_dir(DIRECT ${PLATFORM_DISTRIB_DIR} ${RELATIVE_PYTHON_SCRIPT_DIR} start_jupyter.py)
+    if(RELEASE_MODE)
+        copy_file_to_build_dir(DIRECT ${PLATFORM_DISTRIB_DIR} ${RELATIVE_PYTHON_SCRIPT_DIR} runjupyter.bat)
+        copy_file_to_build_dir(DIRECT ${PLATFORM_DISTRIB_DIR} ${RELATIVE_PYTHON_SCRIPT_DIR} start_jupyter.py)
 
-    install(FILES ${PLATFORM_DISTRIB_DIR}/runjupyter.bat
-                  ${PLATFORM_DISTRIB_DIR}/start_jupyter.py
-            DESTINATION ${RELATIVE_PYTHON_SCRIPT_DIR})
+        install(FILES ${PLATFORM_DISTRIB_DIR}/runjupyter.bat
+                      ${PLATFORM_DISTRIB_DIR}/start_jupyter.py
+                DESTINATION ${RELATIVE_PYTHON_SCRIPT_DIR})
 
-    set(JUPYTER_CONSOLE_FILENAME "${PROJECT_BUILD_DIR}/jupyterconsole.bat")
+        set(JUPYTER_CONSOLE_FILENAME "${PROJECT_BUILD_DIR}/jupyterconsole.bat")
+
+        configure_file(${PLATFORM_DISTRIB_DIR}/jupyterconsole.bat.in ${JUPYTER_CONSOLE_FILENAME})
+        copy_file_to_build_dir(DIRECT ${PLATFORM_DISTRIB_DIR} . jupyterlab.bat)
+        copy_file_to_build_dir(DIRECT ${PLATFORM_DISTRIB_DIR} . jupyterlab.vbs)
+        copy_file_to_build_dir(DIRECT ${PLATFORM_DISTRIB_DIR} . jupyternotebook.bat)
+        copy_file_to_build_dir(DIRECT ${PLATFORM_DISTRIB_DIR} . jupyternotebook.vbs)
+
+        install(FILES ${JUPYTER_CONSOLE_FILENAME}
+                      ${PLATFORM_DISTRIB_DIR}/jupyterlab.bat
+                      ${PLATFORM_DISTRIB_DIR}/jupyterlab.vbs
+                      ${PLATFORM_DISTRIB_DIR}/jupyternotebook.bat
+                      ${PLATFORM_DISTRIB_DIR}/jupyternotebook.vbs
+                DESTINATION .)
+    endif()
+
     set(PYTHON_SHELL_FILENAME "${PROJECT_BUILD_DIR}/pythonshell.bat")
 
-    configure_file(${PLATFORM_DISTRIB_DIR}/jupyterconsole.bat.in ${JUPYTER_CONSOLE_FILENAME})
-    copy_file_to_build_dir(DIRECT ${PLATFORM_DISTRIB_DIR} . jupyterlab.bat)
-    copy_file_to_build_dir(DIRECT ${PLATFORM_DISTRIB_DIR} . jupyterlab.vbs)
-    copy_file_to_build_dir(DIRECT ${PLATFORM_DISTRIB_DIR} . jupyternotebook.bat)
-    copy_file_to_build_dir(DIRECT ${PLATFORM_DISTRIB_DIR} . jupyternotebook.vbs)
     configure_file(${PLATFORM_DISTRIB_DIR}/pythonshell.bat.in ${PYTHON_SHELL_FILENAME})
 
-    install(FILES ${JUPYTER_CONSOLE_FILENAME}
-                  ${PLATFORM_DISTRIB_DIR}/jupyterlab.bat
-                  ${PLATFORM_DISTRIB_DIR}/jupyterlab.vbs
-                  ${PLATFORM_DISTRIB_DIR}/jupyternotebook.bat
-                  ${PLATFORM_DISTRIB_DIR}/jupyternotebook.vbs
-                  ${PYTHON_SHELL_FILENAME}
+    install(FILES ${PYTHON_SHELL_FILENAME}
             DESTINATION .)
 
     # File type association

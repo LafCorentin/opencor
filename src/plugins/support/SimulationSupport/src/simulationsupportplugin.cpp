@@ -41,9 +41,7 @@ PLUGININFO_FUNC SimulationSupportPluginInfo()
     descriptions.insert("fr", QString::fromUtf8("une extension pour supporter des simulations."));
 
     return new PluginInfo(PluginInfo::Category::Support, false, false,
-                          QStringList() << "COMBINESupport" << "CVODESolver" << "DataStore"
-                                        << "ForwardEulerSolver" << "FourthOrderRungeKuttaSolver" << "HeunSolver"
-                                        << "KINSOLSolver" << "SecondOrderRungeKuttaSolver",
+                          QStringList() << "COMBINESupport" << "CVODESolver" << "DataStore" << "ForwardEulerSolver" << "FourthOrderRungeKuttaSolver" << "HeunSolver" << "KINSOLSolver" << "SecondOrderRungeKuttaSolver",
                           descriptions);
 }
 
@@ -158,7 +156,7 @@ void SimulationSupportPlugin::retranslateUi()
 // Python interface
 //==============================================================================
 
-void SimulationSupportPlugin::registerPythonClasses(PyObject *pModule)
+void SimulationSupportPlugin::registerPythonClasses(void *pModule)
 {
     // Register our Python classes
 

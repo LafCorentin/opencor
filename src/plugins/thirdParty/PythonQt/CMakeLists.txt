@@ -27,10 +27,10 @@ string(REPLACE "${CMAKE_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/ext"
 
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     if(WIN32 OR NOT USE_PREBUILT_PYTHONQT_PACKAGE)
-        # If not Windows then we only use the Debug library when we are
-        # actually building PythonQt for debugging
+        # If we are not on Windows then we only use the debug library when we
+        # are actually building PythonQt for debugging
 
-        set(DEBUG_POSTFIX "_d")   # PythonQt uses this for all platforms
+        set(DEBUG_POSTFIX "_d")
     endif()
 endif()
 
@@ -74,31 +74,31 @@ if(USE_PREBUILT_PYTHONQT_PACKAGE)
     if(WIN32)
         if(RELEASE_MODE)
             retrieve_package_file(${PACKAGE_NAME} ${PACKAGE_VERSION}
-                                  ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} 6b77a00beb999a37e705d7bcd2843e71f18ef3fa
+                                  ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} 54c3aff5546a1f8c998157872e9ae14949b937d1
                                   PACKAGE_REPOSITORY ${PACKAGE_REPOSITORY}
                                   SHA1_FILES ${SHA1_FILES}
-                                  SHA1_VALUES 1fd50ce4736dd3dc52228150fc7ce1ae0f02d0dc
+                                  SHA1_VALUES 0b5ef3fdab16ad993ed02897e411c4b4b557199e
                                               8ef254df6fe1b157d3e9da7a928c16887786f602)
         else()
             retrieve_package_file(${PACKAGE_NAME} ${PACKAGE_VERSION}
-                                  ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} 3367e1ffa29a65f9430891d05c24685a3639ecc7
+                                  ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} 1b460f3ece10121a4a0b023985a87618e703301f
                                   PACKAGE_REPOSITORY ${PACKAGE_REPOSITORY}
                                   SHA1_FILES ${SHA1_FILES}
-                                  SHA1_VALUES 929c111ca9ecdb425726dcca676111f5d0f1df4f
+                                  SHA1_VALUES 5ba9235f69f43a5c7db15213d69846f09e888f2d
                                               1c634c8ba4685b29d3c7602f4d5f585313dc2c3c)
         endif()
     elseif(APPLE)
         retrieve_package_file(${PACKAGE_NAME} ${PACKAGE_VERSION}
-                              ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} 10d6869c90298fe29f49ac3e6b5a35ac21faef9d
+                              ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} 6f736a8a2c680410d441a0ab756bd62e4fd95800
                               PACKAGE_REPOSITORY ${PACKAGE_REPOSITORY}
                               SHA1_FILES ${SHA1_FILES}
-                              SHA1_VALUES 111b3c3df66274ff6dd5c0355480c2f3910fe956)
+                              SHA1_VALUES 6b7e81922581ae4a960478a7bbb9f94fa9bd2977)
     else()
         retrieve_package_file(${PACKAGE_NAME} ${PACKAGE_VERSION}
-                              ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} edadfe667c87893a5b64af1d148a32d603cd96e8
+                              ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR} 8d60483fb922986edf0af7fd8cd6b9d5d9166798
                               PACKAGE_REPOSITORY ${PACKAGE_REPOSITORY}
                               SHA1_FILES ${SHA1_FILES}
-                              SHA1_VALUES 7bd353b23b270f2a62be49ea7fc9174e5e2235c2)
+                              SHA1_VALUES c71017eabf3a8d72092a63ae9bea707167dfcc1c)
     endif()
 else()
     # Set platform specific configuration options and tool names
@@ -109,7 +109,7 @@ else()
         set(QUIET_MAKE -c)
     else()
         if(NOT APPLE)
-          # Make sure correct value of RPATH is set in library
+            # Make sure that the correct value of RPATH is set
 
             set(QMAKE_LFLAGS_OPTION "QMAKE_LFLAGS+=\\'-Wl,-rpath,\\\$\\\$ORIGIN/../lib\\'")
         elseif()
@@ -126,7 +126,7 @@ else()
         set(QMAKE_DEBUG_OPTION)
     endif()
 
-    # Wrap our WebKit
+    # Wrap our copy of QtWebKit
 
     set(QMAKE_INCLUDE_PATH "INCLUDEPATH+=${QTWEBKIT_INCLUDE_DIR}")
 
@@ -171,7 +171,7 @@ else()
                    ${PROJECT_BINARY_DIR}/build/python.prf
                    @ONLY)
 
-    ExternalProject_Add_Step(${PACKAGE_BUILD} update_configuration
+    ExternalProject_Add_Step(${PACKAGE_BUILD} updateConfiguration
         COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_BINARY_DIR}/PythonQtOpenCOR.pro
                                          ${PACKAGE_BUILD_DIR}/PythonQtOpenCOR.pro
         COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_BINARY_DIR}/build/python.prf
@@ -196,17 +196,17 @@ else()
             set(REAL_FULL_SHARED_LIBRARY ${FULL_LOCAL_EXTERNAL_PACKAGE_DIR}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}PythonQt${DEBUG_POSTFIX}${CMAKE_SHARED_LIBRARY_SUFFIX}.${LIBRARY_VERSION})
         endif()
 
-        ExternalProject_Add_Step(${PACKAGE_BUILD} CopyLibrary
+        ExternalProject_Add_Step(${PACKAGE_BUILD} copyLibrary
                                  COMMAND ${CMAKE_COMMAND} -E remove -f ${FULL_SHARED_LIBRARY}
                                  COMMAND ${CMAKE_COMMAND} -E copy ${REAL_FULL_SHARED_LIBRARY} ${FULL_SHARED_LIBRARY}
                                  DEPENDEES install)
 
         if(APPLE)
-            # Set RPATH in library to enable linking independent of location
+            # Set RPATH to enable linking independent of location
 
-            ExternalProject_Add_Step(${PACKAGE_BUILD} set_rpath
+            ExternalProject_Add_Step(${PACKAGE_BUILD} setRpath
                                      COMMAND install_name_tool -id @rpath/${SHARED_LIBRARY} ${FULL_SHARED_LIBRARY}
-                                     DEPENDEES CopyLibrary)
+                                     DEPENDEES copyLibrary)
         endif()
 
     endif()
@@ -236,7 +236,6 @@ add_plugin(PythonQt
 
         src/pythonqtplugin.cpp
     PLUGINS
-        Core
         Python
     EXTERNAL_BINARIES_DIR
         ${EXTERNAL_BINARIES_DIR}
@@ -247,7 +246,7 @@ add_plugin(PythonQt
 )
 
 # Update our list of Python specific dependencies
-# Note: we use COPY_EXTERNAL_BINARIES_TARGET instead of PROJECT_NAME to prevent
+# Note: we use COPY_EXTERNAL_BINARIES_TARGET rather than PROJECT_NAME to prevent
 #       a cyclic dependency...
 
 set(PYTHON_DEPENDENCIES ${PYTHON_DEPENDENCIES} ${COPY_EXTERNAL_BINARIES_TARGET} PARENT_SCOPE)

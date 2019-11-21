@@ -25,7 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 //==============================================================================
 
-#include "plugininfo.h"
+#include <QObject>
 
 //==============================================================================
 
@@ -52,7 +52,7 @@ public:
 private:
     int mReferenceCounter = 1;
 
-    const quint64 mSize;
+    quint64 mSize;
     double *mData = nullptr;
 };
 

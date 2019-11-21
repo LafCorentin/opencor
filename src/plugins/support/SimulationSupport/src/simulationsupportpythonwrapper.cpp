@@ -18,28 +18,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *******************************************************************************/
 
 //==============================================================================
-// Python wrapper for SimulationSupport classes
+// Simulation support Python wrapper
 //==============================================================================
 
 #include "corecliutils.h"
 #include "cellmlfileruntime.h"
-#include "datastoreinterface.h"
 #include "datastorepythonwrapper.h"
 #include "filemanager.h"
 #include "interfaces.h"
 #include "pythonqtsupport.h"
 #include "simulation.h"
 #include "simulationmanager.h"
-#include "simulationsupportplugin.h"
 #include "simulationsupportpythonwrapper.h"
-#include "solverinterface.h"
 
 //==============================================================================
 
 #include <QApplication>
-#include <QEventLoop>
 #include <QFileInfo>
-#include <QMap>
 #include <QWidget>
 
 //==============================================================================
@@ -53,8 +48,11 @@ namespace SimulationSupport {
 
 //==============================================================================
 
-static void doSetOdeSolver(SimulationData *pSimulationData, const QString &pOdeSolverName)
+static void setOdeSolver(SimulationData *pSimulationData,
+                         const QString &pOdeSolverName)
 {
+    // Set the given ODE solver for the given simulation data
+
     for (auto solverInterface : Core::solverInterfaces()) {
         if (pOdeSolverName == solverInterface->solverName()) {
             // Set the ODE solver's name
@@ -62,7 +60,7 @@ static void doSetOdeSolver(SimulationData *pSimulationData, const QString &pOdeS
             pSimulationData->setOdeSolverName(pOdeSolverName);
 
             for (const auto &solverInterfaceProperty : solverInterface->solverProperties()) {
-                // Set each ODE solver property's default value
+                // Set each ODE solver property to their default value
 
                 pSimulationData->addOdeSolverProperty(solverInterfaceProperty.id(), solverInterfaceProperty.defaultValue());
             }
@@ -71,13 +69,16 @@ static void doSetOdeSolver(SimulationData *pSimulationData, const QString &pOdeS
         }
     }
 
-    throw std::runtime_error(QObject::tr("Unknown ODE solver.").toStdString());
+    throw std::runtime_error(QObject::tr("The requested solver (%1) could not be found.").arg(pOdeSolverName).toStdString());
 }
 
 //==============================================================================
 
-static void doSetNlaSolver(SimulationData *pSimulationData, const QString &pNlaSolverName)
+static void setNlaSolver(SimulationData *pSimulationData,
+                         const QString &pNlaSolverName)
 {
+    // Set the given NLA solver for the given simulation data
+
     for (auto solverInterface : Core::solverInterfaces()) {
         if (pNlaSolverName == solverInterface->solverName()) {
             // Set the NLA solver's name
@@ -85,7 +86,7 @@ static void doSetNlaSolver(SimulationData *pSimulationData, const QString &pNlaS
             pSimulationData->setNlaSolverName(pNlaSolverName);
 
             for (const auto &solverInterfaceProperty : solverInterface->solverProperties()) {
-                // Set each NLA solver property's default value
+                // Set each NLA solver property to their default value
 
                 pSimulationData->addNlaSolverProperty(solverInterfaceProperty.id(), solverInterfaceProperty.defaultValue());
             }
@@ -94,12 +95,12 @@ static void doSetNlaSolver(SimulationData *pSimulationData, const QString &pNlaS
         }
     }
 
-    throw std::runtime_error(QObject::tr("Unknown NLA solver.").toStdString());
+    throw std::runtime_error(QObject::tr("The requested solver (%1) could not be found.").arg(pNlaSolverName).toStdString());
 }
 
 //==============================================================================
 
-static PyObject *initializeSimulation(const QString &pFileName)
+static PyObject * initializeSimulation(const QString &pFileName)
 {
     // Ask our simulation manager to manage our file and then retrieve the
     // corresponding simulation from it
@@ -119,12 +120,9 @@ static PyObject *initializeSimulation(const QString &pFileName)
             return PythonQt::priv()->wrapQObject(simulation);
         }
 
-        // Get our runtime
-
-        CellMLSupport::CellmlFileRuntime *runtime = simulation->runtime();
-
-        // Find the solver whose name is first in alphabetical order, as this
-        // is the simulation's solver
+        // Retrieve a default ODE and NLA solver
+        // Note: this is useful in case our simulation is solely based on a
+        //       CellML file...
 
         QString odeSolverName = QString();
         QString nlaSolverName = QString();
@@ -133,59 +131,58 @@ static PyObject *initializeSimulation(const QString &pFileName)
             QString solverName = solverInterface->solverName();
 
             if (solverInterface->solverType() == Solver::Type::Ode) {
-                if (odeSolverName.isEmpty()
-                 || odeSolverName.compare(solverName, Qt::CaseInsensitive) > 0) {
+                if (    odeSolverName.isEmpty()
+                    || (odeSolverName.compare(solverName, Qt::CaseInsensitive) > 0)) {
                     odeSolverName = solverName;
                 }
             } else if (solverInterface->solverType() == Solver::Type::Nla) {
-                if (nlaSolverName.isEmpty()
-                 || nlaSolverName.compare(solverName, Qt::CaseInsensitive) > 0) {
+                if (    nlaSolverName.isEmpty()
+                    || (nlaSolverName.compare(solverName, Qt::CaseInsensitive) > 0)) {
                     nlaSolverName = solverName;
                 }
             }
         }
 
-        // Set our solver and its default properties
+        // Set our default ODE and NLA, if needed, solvers
 
-        doSetOdeSolver(simulation->data(), odeSolverName);
+        CellMLSupport::CellmlFileRuntime *runtime = simulation->runtime();
 
-        // Set our NLA solver if we need one
+        setOdeSolver(simulation->data(), odeSolverName);
 
         if ((runtime != nullptr) && runtime->needNlaSolver()) {
-            doSetNlaSolver(simulation->data(), nlaSolverName);
+            setNlaSolver(simulation->data(), nlaSolverName);
         }
 
-        // Complete initialisation by loading any SED-ML properties
+        // Further initialise our simulation, should we be dealing with either
+        // a SED-ML file or a COMBINE archive
+        // Note: this will overwrite the default ODE and NLA solvers that we set
+        //       above...
 
-        if (simulation->fileType() == SimulationSupport::Simulation::FileType::SedmlFile
-         || simulation->fileType() == SimulationSupport::Simulation::FileType::CombineArchive) {
+        if (   (simulation->fileType() == SimulationSupport::Simulation::FileType::SedmlFile)
+            || (simulation->fileType() == SimulationSupport::Simulation::FileType::CombineArchive)) {
+            QString error = simulation->furtherInitialize();
 
-            const QString initialisationError = simulation->furtherInitialize();
-
-            if (!initialisationError.isEmpty()) {
-                // We couldn't complete initialisation so no longer manage the simulation
+            if (!error.isEmpty()) {
+                // We couldn't complete initialisation, so no longer manage the
+                // simulation and raise a Python exception
 
                 simulationManager->unmanage(pFileName);
 
-                // And raise a Python exception
-
-                PyErr_SetString(PyExc_ValueError, qPrintable(initialisationError));
+                PyErr_SetString(PyExc_ValueError, qPrintable(error));
 
                 return nullptr;
             }
         }
 
-        // Do we have a valid simulation?
+        // Reset both the simulation's data and results (well, initialise in the
+        // case of its data), should we have a valid runtime
 
         if ((runtime != nullptr) && runtime->isValid()) {
-            // Reset both the simulation's data and results (well, initialise in the
-            // case of its data)
-
             simulation->data()->reset();
             simulation->results()->reset();
         }
 
-        // Return the simulation as a Python object
+        // Return our simulation object as a Python object
 
         return PythonQt::priv()->wrapQObject(simulation);
     }
@@ -197,89 +194,71 @@ static PyObject *initializeSimulation(const QString &pFileName)
 
 //==============================================================================
 
-static PyObject *openSimulation(PyObject *self, PyObject *args)
+static PyObject * openSimulation(PyObject *pSelf, PyObject *pArgs)
 {
-    Q_UNUSED(self)
+    Q_UNUSED(pSelf)
+
+    // Open a simulation
 
     PyObject *bytes;
-    char *name;
-    Py_ssize_t len;
-    if (PyArg_ParseTuple(args, "O&", PyUnicode_FSConverter, &bytes) == 0) { // NOLINT(cppcoreguidelines-pro-type-vararg)
+
+    if (PyArg_ParseTuple(pArgs, "O&", PyUnicode_FSConverter, &bytes) == 0) { // NOLINT(cppcoreguidelines-pro-type-vararg)
 #include "pythonbegin.h"
         Py_RETURN_NONE;
 #include "pythonend.h"
     }
-    PyBytes_AsStringAndSize(bytes, &name, &len);
-    QString fileName = QString::fromUtf8(name, int(len));
-#include "pythonbegin.h"
-    Py_DECREF(bytes);
-#include "pythonend.h"
 
-    QString ioError = Core::openFile(fileName);
-
-    if (!ioError.isEmpty()) {
-        PyErr_SetString(PyExc_IOError, qPrintable(ioError));
-
-        return nullptr;
-    }
-
-    return initializeSimulation(QFileInfo(fileName).canonicalFilePath());
-}
-
-//==============================================================================
-
-static PyObject *openRemoteSimulation(PyObject *self, PyObject *args)
-{
-    Q_UNUSED(self)
-
-    PyObject *bytes;
-    char *name;
+    char *string;
     Py_ssize_t len;
-    if (PyArg_ParseTuple(args, "O&", PyUnicode_FSConverter, &bytes) == 0) { // NOLINT(cppcoreguidelines-pro-type-vararg)
-#include "pythonbegin.h"
-        Py_RETURN_NONE;
-#include "pythonend.h"
-    }
-    PyBytes_AsStringAndSize(bytes, &name, &len);
-    QString url = QString::fromUtf8(name, int(len));
+
+    PyBytes_AsStringAndSize(bytes, &string, &len);
+
+    bool isLocalFile;
+    QString fileNameOrUrl;
+
+    Core::checkFileNameOrUrl(QString::fromUtf8(string, int(len)), isLocalFile, fileNameOrUrl);
+
 #include "pythonbegin.h"
     Py_DECREF(bytes);
 #include "pythonend.h"
 
-    QString ioError = Core::openRemoteFile(url);
+    QString error = isLocalFile?
+                        Core::openFile(fileNameOrUrl):
+                        Core::openRemoteFile(fileNameOrUrl);
 
-    if (!ioError.isEmpty()) {
-        PyErr_SetString(PyExc_IOError, qPrintable(ioError));
+    if (!error.isEmpty()) {
+        PyErr_SetString(PyExc_IOError, qPrintable(error));
 
         return nullptr;
     }
 
-    return initializeSimulation(Core::localFileName(url));
+    return initializeSimulation(isLocalFile?
+                                    fileNameOrUrl:
+                                    Core::FileManager::instance()->fileName(fileNameOrUrl));
 }
 
 //==============================================================================
 
-static PyObject *closeSimulation(PyObject *self, PyObject *args)
+static PyObject * closeSimulation(PyObject *pSelf, PyObject *pArgs)
 {
-    Q_UNUSED(self)
+    Q_UNUSED(pSelf)
 
-    if (PyTuple_Size(args) > 0) {
+    // Close a simulation
+
+    if (PyTuple_Size(pArgs) > 0) {
 #include "pythonbegin.h"
-        PythonQtInstanceWrapper *wrappedSimulation = PythonQtSupport::getInstanceWrapper(PyTuple_GET_ITEM(args, 0)); // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
+        PythonQtInstanceWrapper *wrappedSimulation = PythonQtSupport::getInstanceWrapper(PyTuple_GET_ITEM(pArgs, 0)); // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
 #include "pythonend.h"
 
         if (wrappedSimulation != nullptr) {
-            auto simulation = static_cast<SimulationSupport::Simulation *>(wrappedSimulation->_objPointerCopy);
+            // Close the simulation by asking our file and simulation managers
+            // to umanage it
 
+            auto simulation = static_cast<SimulationSupport::Simulation *>(wrappedSimulation->_objPointerCopy);
             QString fileName = simulation->fileName();
 
-            // Close the simulation by asking our manager to no longer manage it
-
-            SimulationManager::instance()->unmanage(simulation->fileName());
-
-            // And tell the file manager that we no longer are using the file
-
             Core::FileManager::instance()->unmanage(fileName);
+            SimulationManager::instance()->unmanage(fileName);
         }
     }
 
@@ -290,14 +269,12 @@ static PyObject *closeSimulation(PyObject *self, PyObject *args)
 
 //==============================================================================
 
-SimulationSupportPythonWrapper::SimulationSupportPythonWrapper(PyObject *pModule, QObject *pParent) :
-    QObject(pParent),
-    mElapsedTime(-1),
-    mErrorMessage(QString())
+SimulationSupportPythonWrapper::SimulationSupportPythonWrapper(void *pModule,
+                                                               QObject *pParent) :
+    QObject(pParent)
 {
-    Q_UNUSED(pModule)
-
-    // Register some OpenCOR classes with Python and decorators to our ourselves
+    // Register some OpenCOR classes with Python and add some decorators to
+    // ourselves
 
     PythonQtSupport::registerClass(&Simulation::staticMetaObject);
     PythonQtSupport::registerClass(&SimulationData::staticMetaObject);
@@ -309,61 +286,23 @@ SimulationSupportPythonWrapper::SimulationSupportPythonWrapper(PyObject *pModule
 
     static std::array<PyMethodDef, 4> PythonSimulationSupportMethods = {{
                                                                            { "openSimulation", openSimulation, METH_VARARGS, "Open a simulation." },
-                                                                           { "openRemoteSimulation", openRemoteSimulation, METH_VARARGS, "Open a remote simulation." },
                                                                            { "closeSimulation", closeSimulation, METH_VARARGS, "Close a simulation." },
                                                                            { nullptr, nullptr, 0, nullptr }
                                                                        }};
 
-    PyModule_AddFunctions(pModule, PythonSimulationSupportMethods.data());
-}
-
-//==============================================================================
-
-void SimulationSupportPythonWrapper::error(const QString &pErrorMessage)
-{
-    mErrorMessage = pErrorMessage;
-}
-
-//==============================================================================
-
-void SimulationSupportPythonWrapper::clearResults(Simulation *pSimulation)
-{
-    // Ask our widget to clear our results
-
-    // Note: we get the widget to do this as it needs to clear all
-    // associated graphs...
-
-    emit pSimulation->clearResults(pSimulation->fileName());
-}
-
-//==============================================================================
-
-void SimulationSupportPythonWrapper::resetParameters(Simulation *pSimulation)
-{
-    // Reset our model parameters
-
-    pSimulation->reset();
-}
-
-//==============================================================================
-
-void SimulationSupportPythonWrapper::simulationFinished(const qint64 &pElapsedTime)
-{
-    // Save the elapsed time of the simulation
-
-    mElapsedTime = pElapsedTime;
-
-    emit gotElapsedTime();
+    PyModule_AddFunctions(static_cast<PyObject *>(pModule),
+                          PythonSimulationSupportMethods.data());
 }
 
 //==============================================================================
 
 bool SimulationSupportPythonWrapper::valid(Simulation *pSimulation)
 {
-    // Is the simulation's model valid?
+    // Return whether the given simulation is valid
 
     if (!pSimulation->hasBlockingIssues()) {
         CellMLSupport::CellmlFileRuntime *runtime = pSimulation->runtime();
+
         return (runtime != nullptr) && runtime->isValid();
     }
 
@@ -372,44 +311,111 @@ bool SimulationSupportPythonWrapper::valid(Simulation *pSimulation)
 
 //==============================================================================
 
-PyObject *SimulationSupportPythonWrapper::issues(Simulation *pSimulation) const
+bool SimulationSupportPythonWrapper::run(Simulation *pSimulation)
 {
-    // Return a list of any issues the simulation has
+    // Run the given simulation, but only if it doesn't have blocking issues and
+    // if it is valid
+
+    if (pSimulation->hasBlockingIssues()) {
+        throw std::runtime_error(tr("The simulation has blocking issues and cannot therefore be run.").toStdString());
+    }
+
+    if (!valid(pSimulation)) {
+        throw std::runtime_error(tr("The simulation has an invalid runtime and cannot therefore be run.").toStdString());
+    }
+
+    // Reset our internals
+
+    mElapsedTime = -1;
+    mErrorMessage = QString();
+
+    // Try to allocate all the memory we need by adding a run to our simulation
+    // and, if successful, run our simulation
+    // Note: we keep track of our focus widget (which might be our Python
+    //       console window), so that we can give the focus back to it once we
+    //       are done running our simulation...
+
+    QWidget *focusWidget = QApplication::focusWidget();
+
+    if (pSimulation->addRun()) {
+        // Keep track of any simulation error and of when the simulation is done
+
+        connect(pSimulation, &Simulation::error,
+                this, &SimulationSupportPythonWrapper::simulationError);
+        connect(pSimulation, &Simulation::done,
+                this, &SimulationSupportPythonWrapper::simulationDone);
+
+        // Run our simulation and wait for it to complete
+        // Note: we use a queued connection because the event is in our
+        //       thread...
+
+        QEventLoop waitLoop;
+
+        connect(pSimulation, &Simulation::done,
+                &waitLoop, &QEventLoop::quit,
+                Qt::QueuedConnection);
+
+        pSimulation->run();
+
+        waitLoop.exec();
+
+        disconnect(pSimulation, nullptr, this, nullptr);
+
+        // Throw any error message that has been generated
+
+        if (!mErrorMessage.isEmpty()) {
+            throw std::runtime_error(mErrorMessage.toStdString());
+        }
+    } else {
+        throw std::runtime_error(tr("The memory required for the simulation could not be allocated.").toStdString());
+    }
+
+    // Restore the focus to the previous widget
+
+    if (focusWidget != nullptr) {
+        focusWidget->setFocus();
+    }
+
+    return mElapsedTime >= 0;
+}
+
+//==============================================================================
+
+void SimulationSupportPythonWrapper::reset(Simulation *pSimulation, bool pAll)
+{
+    // Reset our simulation
+
+    pSimulation->reset(pAll);
+}
+
+//==============================================================================
+
+void SimulationSupportPythonWrapper::clearResults(Simulation *pSimulation)
+{
+    // Reset our simulation results
+
+    pSimulation->results()->reset();
+}
+
+//==============================================================================
+
+PyObject * SimulationSupportPythonWrapper::issues(Simulation *pSimulation) const
+{
+    // Return a list of issues the simulation has
 
     PyObject *issuesList = PyList_New(0);
-
     auto simulationIssues = pSimulation->issues();
 
     for (const auto &simulationIssue : simulationIssues) {
-        QString issueType;
         QString information;
-
-        switch (simulationIssue.type()) {
-        case SimulationSupport::SimulationIssue::Type::Information:
-            issueType = tr("Information");
-
-            break;
-        case SimulationSupport::SimulationIssue::Type::Error:
-            issueType = tr("Error");
-
-            break;
-        case SimulationSupport::SimulationIssue::Type::Warning:
-            issueType = tr("Warning");
-
-            break;
-        case SimulationSupport::SimulationIssue::Type::Fatal:
-            issueType = tr("Fatal");
-
-            break;
-        }
 
         if ((simulationIssue.line() != 0) && (simulationIssue.column() != 0)) {
             information = QString("[%1:%2] %3: %4.").arg(simulationIssue.line())
-                                                     .arg(simulationIssue.column())
-                                                     .arg(issueType,
-                                                          Core::formatMessage(simulationIssue.message()));
+                                                    .arg(simulationIssue.column())
+                                                    .arg(simulationIssue.typeAsString(),
+                                                         Core::formatMessage(simulationIssue.message()));
         } else {
-            information = QString("%1: %2.").arg(issueType,
+            information = QString("%1: %2.").arg(simulationIssue.typeAsString(),
                                                  Core::formatMessage(simulationIssue.message()));
         }
 
@@ -421,143 +427,61 @@ PyObject *SimulationSupportPythonWrapper::issues(Simulation *pSimulation) const
 
 //==============================================================================
 
-bool SimulationSupportPythonWrapper::run(Simulation *pSimulation)
-{
-    if (pSimulation->hasBlockingIssues()) {
-        throw std::runtime_error(tr("Cannot run because simulation has blocking issues.").toStdString());
-    }
-
-    if (!valid(pSimulation)) {
-        throw std::runtime_error(tr("Cannot run because simulation has an invalid runtime.").toStdString());
-    }
-
-    QWidget *focusWidget = nullptr;
-
-    // A successful run will set elapsed time
-
-    mElapsedTime = -1;
-
-    // Clear error message
-
-    mErrorMessage = QString();
-
-    // Try to allocate all the memory we need by adding a run to our
-    // simulation
-
-    bool runSimulation = pSimulation->addRun();
-
-    // Run our simulation (after having added a run to our graphs), in
-    // case we were able to allocate all the memory we need
-
-    if (runSimulation) {
-        // Save the keyboard focus, which will be to our IPython console
-
-        focusWidget = QApplication::focusWidget();
-
-        // Let the simulation widget know we are starting
-
-        emit pSimulation->runStarting(pSimulation->fileName());
-
-        // Get the elapsed time when the simulation has finished
-
-        connect(pSimulation, &Simulation::done,
-                this, &SimulationSupportPythonWrapper::simulationFinished);
-
-        // Get error messages from the simulation
-
-        connect(pSimulation, &Simulation::error,
-                this, &SimulationSupportPythonWrapper::error);
-
-        // Use an event loop so we don't busy wait
-
-        QEventLoop waitForCompletion;
-
-        // We use a queued connection because the event is in our thread
-
-        connect(this, &SimulationSupportPythonWrapper::gotElapsedTime,
-                &waitForCompletion, &QEventLoop::quit, Qt::QueuedConnection);
-
-        // Start the simulation and wait for it to complete
-
-        pSimulation->run();
-
-        waitForCompletion.exec();
-
-        // Disconnect our signal handlers now that the simulation has finished
-
-        disconnect(pSimulation, nullptr, this, nullptr);
-
-        if (!mErrorMessage.isEmpty()) {
-            throw std::runtime_error(mErrorMessage.toStdString());
-        }
-    } else {
-        throw std::runtime_error(tr("We could not allocate the memory required for the simulation.").toStdString());
-    }
-
-    // Restore the keyboard focus back to IPython
-
-    if (focusWidget != nullptr) {
-        focusWidget->setFocus();
-    }
-
-    return mElapsedTime >= 0;
-}
-
-//==============================================================================
-
 void SimulationSupportPythonWrapper::setStartingPoint(SimulationData *pSimulationData,
-    const double &pStartingPoint, const bool &pRecompute)
+                                                      double pStartingPoint,
+                                                      bool pRecompute)
 {
+    // Set the starting point of our simulation
+
     pSimulationData->setStartingPoint(pStartingPoint, pRecompute);
-
-    emit pSimulationData->updatedPointData();
 }
 
 //==============================================================================
 
-void SimulationSupportPythonWrapper::setEndingPoint(SimulationData *pSimulationData, const double &pEndingPoint)
+void SimulationSupportPythonWrapper::setEndingPoint(SimulationData *pSimulationData,
+                                                    double pEndingPoint)
 {
+    // Set the ending point of our simulation
+
     pSimulationData->setEndingPoint(pEndingPoint);
-
-    emit pSimulationData->updatedPointData();
 }
 
 //==============================================================================
 
-void SimulationSupportPythonWrapper::setPointInterval(SimulationData *pSimulationData, const double &pPointInterval)
+void SimulationSupportPythonWrapper::setPointInterval(SimulationData *pSimulationData,
+                                                      double pPointInterval)
 {
+    // Set the point interval for our simulation
+
     pSimulationData->setPointInterval(pPointInterval);
-
-    emit pSimulationData->updatedPointData();
-}
-
-
-//==============================================================================
-
-void SimulationSupportPythonWrapper::setOdeSolver(SimulationData *pSimulationData, const QString &pOdeSolverName)
-{
-    doSetOdeSolver(pSimulationData, pOdeSolverName);
 }
 
 //==============================================================================
 
-void SimulationSupportPythonWrapper::setNlaSolver(SimulationData *pSimulationData, const QString &pNlaSolverName)
+void SimulationSupportPythonWrapper::setOdeSolver(SimulationData *pSimulationData,
+                                                  const QString &pOdeSolverName)
 {
-    doSetNlaSolver(pSimulationData, pNlaSolverName);
+    // Set the given ODE solver for the given simulation data
+
+    SimulationSupport::setOdeSolver(pSimulationData, pOdeSolverName);
 }
 
 //==============================================================================
 
-PyObject * SimulationSupportPythonWrapper::algebraic(SimulationData *pSimulationData) const
+void SimulationSupportPythonWrapper::setNlaSolver(SimulationData *pSimulationData,
+                                                  const QString &pNlaSolverName)
 {
-    return DataStore::DataStorePythonWrapper::dataStoreValuesDict(pSimulationData->algebraicValues(),
-                                                                  &(pSimulationData->simulationDataUpdatedFunction()));
+    // Set the given NLA solver for the given simulation data
+
+    SimulationSupport::setNlaSolver(pSimulationData, pNlaSolverName);
 }
 
 //==============================================================================
 
 PyObject * SimulationSupportPythonWrapper::constants(SimulationData *pSimulationData) const
 {
+    // Return our constants values
+
     return DataStore::DataStorePythonWrapper::dataStoreValuesDict(pSimulationData->constantsValues(),
                                                                   &(pSimulationData->simulationDataUpdatedFunction()));
 }
@@ -566,6 +490,8 @@ PyObject * SimulationSupportPythonWrapper::constants(SimulationData *pSimulation
 
 PyObject * SimulationSupportPythonWrapper::rates(SimulationData *pSimulationData) const
 {
+    // Return our rates values
+
     return DataStore::DataStorePythonWrapper::dataStoreValuesDict(pSimulationData->ratesValues(),
                                                                   &(pSimulationData->simulationDataUpdatedFunction()));
 }
@@ -574,28 +500,37 @@ PyObject * SimulationSupportPythonWrapper::rates(SimulationData *pSimulationData
 
 PyObject * SimulationSupportPythonWrapper::states(SimulationData *pSimulationData) const
 {
+    // Return our states values
+
     return DataStore::DataStorePythonWrapper::dataStoreValuesDict(pSimulationData->statesValues(),
                                                                   &(pSimulationData->simulationDataUpdatedFunction()));
 }
 
 //==============================================================================
 
-const OpenCOR::DataStore::DataStoreVariable * SimulationSupportPythonWrapper::points(SimulationResults *pSimulationResults) const
+PyObject * SimulationSupportPythonWrapper::algebraic(SimulationData *pSimulationData) const
 {
-    return pSimulationResults->pointsVariable();
+    // Return our algebraic values
+
+    return DataStore::DataStorePythonWrapper::dataStoreValuesDict(pSimulationData->algebraicValues(),
+                                                                  &(pSimulationData->simulationDataUpdatedFunction()));
 }
 
 //==============================================================================
 
-PyObject * SimulationSupportPythonWrapper::algebraic(SimulationResults *pSimulationResults) const
+DataStore::DataStoreVariable * SimulationSupportPythonWrapper::points(SimulationResults *pSimulationResults) const
 {
-    return DataStore::DataStorePythonWrapper::dataStoreVariablesDict(pSimulationResults->algebraicVariables());
+    // Return our points variable
+
+    return pSimulationResults->pointsVariable();
 }
 
 //==============================================================================
 
 PyObject * SimulationSupportPythonWrapper::constants(SimulationResults *pSimulationResults) const
 {
+    // Return our constants variables
+
     return DataStore::DataStorePythonWrapper::dataStoreVariablesDict(pSimulationResults->constantsVariables());
 }
 
@@ -603,6 +538,8 @@ PyObject * SimulationSupportPythonWrapper::constants(SimulationResults *pSimulat
 
 PyObject * SimulationSupportPythonWrapper::rates(SimulationResults *pSimulationResults) const
 {
+    // Return our rates variables
+
     return DataStore::DataStorePythonWrapper::dataStoreVariablesDict(pSimulationResults->ratesVariables());
 }
 
@@ -610,45 +547,36 @@ PyObject * SimulationSupportPythonWrapper::rates(SimulationResults *pSimulationR
 
 PyObject * SimulationSupportPythonWrapper::states(SimulationResults *pSimulationResults) const
 {
+    // Return our states variables
+
     return DataStore::DataStorePythonWrapper::dataStoreVariablesDict(pSimulationResults->statesVariables());
 }
 
 //==============================================================================
 
-PyObject * SimulationSupportPythonWrapper::gradients(SimulationResults *pSimulationResults) const
+PyObject * SimulationSupportPythonWrapper::algebraic(SimulationResults *pSimulationResults) const
 {
-    SimulationData *simulationData = pSimulationResults->simulation()->data();
-    DataStore::DataStoreVariables constantVariables = pSimulationResults->constantsVariables();
-    DataStore::DataStoreVariables stateVariables = pSimulationResults->statesVariables();
-    DataStore::DataStoreVariables gradientVariables = pSimulationResults->gradientsVariables();
-    int statesCount = stateVariables.size();
-    int gradientsCount = gradientVariables.size()/statesCount;
-    int *indices = simulationData->gradientIndices();
-    PyObject *gradientsDict = PyDict_New();
-    QMap<QString, PyObject *> stateGradientsDictionaries;
+    // Return our algebraic variables
 
-    // We need to transpose gradients when building dictionary
+    return DataStore::DataStorePythonWrapper::dataStoreVariablesDict(pSimulationResults->algebraicVariables());
+}
 
-    for (int i = 0; i < gradientsCount; ++i) {
-        DataStore::DataStoreVariable *constant = constantVariables[indices[i]];
+//==============================================================================
 
-        for (int j = 0; j < statesCount; ++j) {
-            DataStore::DataStoreVariable *state = stateVariables[j];
-            DataStore::DataStoreVariable *gradient = gradientVariables[i*statesCount + j];
+void SimulationSupportPythonWrapper::simulationError(const QString &pErrorMessage)
+{
+    // Keep track of the given error message
 
-            // Each state variable has a dictionary containing gradients wrt each constant
+    mErrorMessage = pErrorMessage;
+}
 
-            PyObject *stateGradientsDict = stateGradientsDictionaries[state->uri()];
-            if (stateGradientsDict == nullptr) {
-                stateGradientsDict = PyDict_New();
-                PyDict_SetItemString(gradientsDict, state->uri().toLatin1().data(), stateGradientsDict);
-                stateGradientsDictionaries.insert(state->uri(), stateGradientsDict);
-            }
+//==============================================================================
 
-            PythonQtSupport::addObject(stateGradientsDict, constant->uri(), gradient);
-        }
-    }
-    return gradientsDict;
+void SimulationSupportPythonWrapper::simulationDone(qint64 pElapsedTime)
+{
+    // Save the given elapsed time and let people know that we have got it
+
+    mElapsedTime = pElapsedTime;
 }
 
 //==============================================================================

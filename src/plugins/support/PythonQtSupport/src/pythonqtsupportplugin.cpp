@@ -105,7 +105,7 @@ void PythonQtSupportPlugin::initializePlugin()
 
     // Create a Python module to access OpenCOR's objects
 
-    mModule = PythonQt::self()->createModuleFromScript("OpenCOR");
+    mModule = PythonQt::self()->createModuleFromScript("opencor");
 
     // Give a file name to our Python module
     // Note: indeed, IPython tracebacks are noisy if modules don't have have a
@@ -136,11 +136,10 @@ void PythonQtSupportPlugin::initializePlugin()
     //       results in an empty string
 
     auto wSetPythonPathScript = setPythonPathScript.toStdWString();
-    mArgV[0] = const_cast<wchar_t *>(wSetPythonPathScript.c_str());
-
     auto wPythonHome = pythonHome.toStdWString();
-    mArgV[1] = const_cast<wchar_t *>(wPythonHome.c_str());
 
+    mArgV[0] = const_cast<wchar_t *>(wSetPythonPathScript.c_str());
+    mArgV[1] = const_cast<wchar_t *>(wPythonHome.c_str());
     mArgV[2] = const_cast<wchar_t *>(L"-s");
     mArgV[3] = nullptr;
 
@@ -154,6 +153,7 @@ void PythonQtSupportPlugin::initializePlugin()
 
     mArgV[0] = const_cast<wchar_t *>(L"");
     mArgV[1] = nullptr;
+
     PySys_SetArgvEx(1, mArgV, 0);
 }
 

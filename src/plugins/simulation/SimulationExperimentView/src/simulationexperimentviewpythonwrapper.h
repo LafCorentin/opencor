@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *******************************************************************************/
 
 //==============================================================================
-// Python wrapper for SimulationExperimentView classes
+// Simulation Experiment view Python wrapper
 //==============================================================================
 
 #pragma once
@@ -36,9 +36,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //==============================================================================
 
 namespace OpenCOR {
-
-//==============================================================================
-
 namespace SimulationExperimentView {
 
 //==============================================================================
@@ -48,8 +45,8 @@ class SimulationExperimentViewPythonWrapper : public QObject
     Q_OBJECT
 
 public:
-    explicit SimulationExperimentViewPythonWrapper(PyObject *pModule,
-                                                   QObject *pParent = nullptr);
+    explicit SimulationExperimentViewPythonWrapper(void *pModule,
+                                                   QObject *pParent);
 };
 
 //==============================================================================

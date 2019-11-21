@@ -239,6 +239,9 @@ void SimulationExperimentViewPlugin::pluginsInitialized(const Plugins &pLoadedPl
     mViewWidget->hide();
 
     // Save the view widget for our Python wrapper
+    // Note: indeed, our Python wrapper relies on the global instance of our
+    //       plugin, so we want to make sure that it points to the Simulation
+    //       Experiment view used by OpenCOR...
 
     instance()->mViewWidget = mViewWidget;
 }
@@ -406,7 +409,7 @@ QIcon SimulationExperimentViewPlugin::fileTabIcon(const QString &pFileName) cons
 // Python interface
 //==============================================================================
 
-void SimulationExperimentViewPlugin::registerPythonClasses(PyObject *pModule)
+void SimulationExperimentViewPlugin::registerPythonClasses(void *pModule)
 {
     // Register our Python classes
 
