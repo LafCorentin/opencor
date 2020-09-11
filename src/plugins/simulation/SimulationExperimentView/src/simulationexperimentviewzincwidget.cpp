@@ -357,7 +357,7 @@ qDebug(">>> init data");
     // Reset our field
 
     if (pDataSize>0) {
-        updateNodeValues(0, pDataSize,true);
+        updateNodeValues(0, int(pDataSize),true);
     } else {
         updateNodeValues(0, 1, true);
     }
@@ -403,6 +403,7 @@ void SimulationExperimentViewZincWidget::addData(int pDataSize)
 
         mTimeCheckBox->setChecked(true);
     }
+
 }
 
 
@@ -417,12 +418,11 @@ void SimulationExperimentViewZincWidget::updateNodeValues(int pValueBegin, int p
         qDebug("nodeSet %d/%d",nodeSet.isValid(),true);
 
         OpenCMISS::Zinc::Nodetemplate nodeTemplate = nodeSet.createNodetemplate();
-        qDebug("mNodeTemplate %d/%d",nodeTemplate.isValid(),true);
-        qDebug("defineField %d", nodeTemplate.defineField(mDataField));
+
+        nodeTemplate.defineField(mDataField);
 
         OpenCMISS::Zinc::Timesequence timeSequence = fieldModule.getMatchingTimesequence(pValueEnd, mTimeValues);
-        qDebug("timeSequence %d/%d",timeSequence.isValid(),true);
-        qDebug("setTimesequence %d", nodeTemplate.setTimesequence(mDataField,timeSequence));
+        nodeTemplate.setTimesequence(mDataField,timeSequence);
 
         OpenCMISS::Zinc::Fieldcache fieldCache = fieldModule.createFieldcache();
 
@@ -565,8 +565,13 @@ void SimulationExperimentViewZincWidget::initializeZincRegion()
 
         // hic sunt dracones
 
-        OpenCMISS::Zinc::Mesh mesh = fieldModule.findMeshByDimension(3);
-
+        OpenCMISS::Zinc::Mesh mesh;
+        for (int dimension = 3; dimension >= 1; --dimension)
+        {
+            mesh = fieldModule.findMeshByDimension(dimension);
+            if (mesh.getSize() > 0)
+                break;
+        }
         OpenCMISS::Zinc::Elementtemplate elementTemplate = mesh.createElementtemplate();
         OpenCMISS::Zinc::Elementiterator elementiter = mesh.createElementiterator();
         OpenCMISS::Zinc::Element element;
@@ -610,6 +615,7 @@ void SimulationExperimentViewZincWidget::initializeZincRegion()
         // Lines
 
         mLines = scene.createGraphicsLines();
+        mLines.setCoordinateField(mCoordinates);
 
         mLines.setMaterial(mZincContext.getMaterialmodule().findMaterialByName("black"));
         mLines.setSpectrum(mSpectrum);
@@ -618,6 +624,7 @@ void SimulationExperimentViewZincWidget::initializeZincRegion()
         // Surfaces
 
         mSurfaces = scene.createGraphicsSurfaces();
+        mSurfaces.setCoordinateField(mCoordinates);
 
         mSurfaces.setSpectrum(mSpectrum);
         mSurfaces.setMaterial(mZincContext.getMaterialmodule().findMaterialByName("white"));
@@ -719,7 +726,6 @@ void SimulationExperimentViewZincWidget::timeSliderValueChanged(int pTime)
     mTimeKeeper.setTime(time);
 }
 
-
 //==============================================================================
 
 void SimulationExperimentViewZincWidget::timerTimeOut()
@@ -783,9 +789,9 @@ Q_UNUSED(pGraphicsType)
 
         if (   (pGraphicsType == GraphicsType::All)
             || (pGraphicsType == GraphicsType::Lines)) {
-            mLines.setCoordinateField(mActionLines->isChecked()?
+            qDebug(">>> set line coordinate field %d",mLines.setCoordinateField(mActionLines->isChecked()?
                                           mCoordinates:
-                                          OpenCMISS::Zinc::Field());
+                                          OpenCMISS::Zinc::Field()));
         }
 
         // Surfaces
