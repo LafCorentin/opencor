@@ -18,18 +18,20 @@ along with this program. If not, see <https://gnu.org/licenses>.
 *******************************************************************************/
 
 //==============================================================================
-// Zinc widget
+// CellML-Zinc Mapping view Zinc widget
 //==============================================================================
 
 #include "cellmlfilemanager.h"
 #include "cellmlzincmappingvieweditingwidget.h"
 #include "cellmlzincmappingviewzincwidget.h"
 #include "corecliutils.h"
+#include "coreguiutils.h"
 #include "filemanager.h"
 
 //==============================================================================
 
 #include <QDir>
+#include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QOpenGLContext>
@@ -75,6 +77,58 @@ CellMLZincMappingViewZincWidget::CellMLZincMappingViewZincWidget(QWidget *pParen
     //TODO usefull ?
     mZincSceneViewerDescription = sceneViewer().writeDescription();
 
+
+    // Create and connect our menu actions
+
+    mActionAxes = Core::newAction(true,this);
+    mActionLines = Core::newAction(true,this);
+    mActionSurfaces = Core::newAction(true,this);
+    mActionIsosurfaces = Core::newAction(true,this);
+    mActionLabel = Core::newAction(true,this);
+
+    //TODO put this in settings
+    mActionAxes->setChecked(true);
+    mActionLines->setChecked(true);
+    mActionSurfaces->setChecked(true);
+    mActionIsosurfaces->setChecked(true);
+    mActionLabel->setChecked(true);
+
+    mActionAxes->setText("Axes");
+    mActionLines->setText("Lines");
+    mActionSurfaces->setText("Surfaces");
+    mActionIsosurfaces->setText("Isosurfaces");
+    mActionLabel->setText("Labels");
+
+    connect(mActionAxes, &QAction::triggered,
+            this, &CellMLZincMappingViewZincWidget::actionAxesTriggered);
+    connect(mActionLines, &QAction::triggered,
+            this, &CellMLZincMappingViewZincWidget::actionLinesTriggered);
+    connect(mActionSurfaces, &QAction::triggered,
+            this, &CellMLZincMappingViewZincWidget::actionSurfacesTriggered);
+    connect(mActionIsosurfaces, &QAction::triggered,
+            this, &CellMLZincMappingViewZincWidget::actionIsosurfacesTriggered);
+    connect(mActionLabel, &QAction::triggered,
+            this, &CellMLZincMappingViewZincWidget::actionLabelTriggered);
+
+    // Allow for things to be dropped on us
+
+    setAcceptDrops(true);
+
+    // Create and populate our context menu
+
+    QMenu *contextMenu = new QMenu(this);
+
+    contextMenu->addAction(mActionAxes);
+    contextMenu->addAction(mActionLines);
+    contextMenu->addAction(mActionSurfaces);
+    contextMenu->addAction(mActionIsosurfaces);
+    contextMenu->addSeparator();
+    contextMenu->addAction(mActionLabel);
+
+    setContextMenu(contextMenu);
+
+    // initialize zinc
+
     setup();
 
     initAuxFile();
@@ -82,6 +136,10 @@ CellMLZincMappingViewZincWidget::CellMLZincMappingViewZincWidget(QWidget *pParen
     setupRegion();
 
     draw();
+
+    // Display all our objects
+
+    showHideGraphics(GraphicsType::All);
 }
 
 //==============================================================================
@@ -121,7 +179,7 @@ bool CellMLZincMappingViewZincWidget::hasNode(int pId)
 
 //==============================================================================
 
-void CellMLZincMappingViewZincWidget::setNodeMapped(int pId)
+void CellMLZincMappingViewZincWidget::setNodeMapped(int pId, QString pComponent, QString pVariable)
 {
     auto fieldModule = mZincContext.getDefaultRegion().getFieldmodule();
     OpenCMISS::Zinc::Node node = fieldModule
@@ -140,12 +198,48 @@ void CellMLZincMappingViewZincWidget::setNodeMapped(int pId)
             OpenCMISS::Zinc::NodesetGroup nodesetGroup = nodeGroupField.getNodesetGroup();
             nodesetGroup.addNode(node);
 
+            OpenCMISS::Zinc::Nodeset nodeSet = fieldModule.findNodesetByFieldDomainType(OpenCMISS::Zinc::Field::DOMAIN_TYPE_NODES);
+            OpenCMISS::Zinc::Nodetemplate nodeTemplate = nodeSet.createNodetemplate();
+            nodeTemplate.defineField(mDisplayField);
+
+            OpenCMISS::Zinc::Fieldcache fieldCache = fieldModule.createFieldcache();
+
+            fieldCache.setNode(node);
+            node.merge(nodeTemplate);
+
+            mDisplayField.assignString(fieldCache,qPrintable(pComponent + " " + pVariable));
+
         } else {
             if (mMappedSelectionGroup.isValid()) {
                 mZincContext.getDefaultRegion().getScene().setSelectionField(OpenCMISS::Zinc::Field());
             }
         }
+
     fieldModule.endChange();
+}
+
+//==============================================================================
+
+QList<bool> CellMLZincMappingViewZincWidget::getCheckedAction()
+{
+    return {mActionAxes->isChecked(),
+            mActionLines->isChecked(),
+            mActionSurfaces->isChecked(),
+            mActionIsosurfaces->isChecked(),
+            mActionLabel->isChecked()};
+}
+
+//==============================================================================
+
+void CellMLZincMappingViewZincWidget::setCheckedAction(QList<bool> values)
+{
+    mActionAxes->setChecked(values.isEmpty() ? true : values.takeFirst());
+    mActionLines->setChecked(values.isEmpty() ? true : values.takeFirst());
+    mActionSurfaces->setChecked(values.isEmpty() ? true : values.takeFirst());
+    mActionIsosurfaces->setChecked(values.isEmpty() ? true : values.takeFirst());
+    mActionLabel->setChecked(values.isEmpty() ? true : values.takeFirst());
+
+    showHideGraphics(GraphicsType::All);
 }
 
 //==============================================================================
@@ -206,7 +300,7 @@ void CellMLZincMappingViewZincWidget::wheelEvent(QWheelEvent *pEvent)
 
 void CellMLZincMappingViewZincWidget::dragEnterEvent(QDragEnterEvent *pEvent)
 {
-    if (pEvent->mimeData()->hasFormat(CellMLZincMappingViewEditingModel::MappingViewEdittingMimeType)) {
+    if (pEvent->mimeData()->hasFormat(CellMLZincMappingViewEditingMimeType)) {
         pEvent->acceptProposedAction();
     } else {
         pEvent->ignore();
@@ -230,14 +324,16 @@ void CellMLZincMappingViewZincWidget::dragMoveEvent(QDragMoveEvent *pEvent)
 
 void CellMLZincMappingViewZincWidget::dropEvent(QDropEvent *pEvent)
 {
-    QString data = pEvent->mimeData()->data(CellMLZincMappingViewEditingModel::MappingViewEdittingMimeType);
+    QString data = pEvent->mimeData()->data(CellMLZincMappingViewEditingMimeType);
     const QStringList splitText = data.split("|");
 
     pEvent->acceptProposedAction();
+    QString component = splitText[1];
+    QString variable = splitText.first();
 
-    mEditingWidget->setNodeValue(mIdSelectedNode,splitText[1],splitText.first());
+    mEditingWidget->setNodeValue(mIdSelectedNode,component,variable);
 
-    setNodeMapped(mIdSelectedNode);
+    setNodeMapped(mIdSelectedNode,component,variable);
 }
 
 //==============================================================================
@@ -258,7 +354,7 @@ void CellMLZincMappingViewZincWidget::setup()
 
 void CellMLZincMappingViewZincWidget::setupRegion()
 {
-    //Create and initialize region and scene
+    // Create and initialize region and scene
 
     OpenCMISS::Zinc::Scene scene = mZincContext.getDefaultRegion().getScene();
 
@@ -276,7 +372,8 @@ void CellMLZincMappingViewZincWidget::setupRegion()
 
 void CellMLZincMappingViewZincWidget::initAuxFile()
 {
-    // for each exnode file, seek for the exelem
+    // For each exnode file, seek for the exelem
+
     for (auto file : mZincMeshFileNames) {
         if (file.endsWith(".exnode")) {
             QString newFile = file;
@@ -317,40 +414,65 @@ void CellMLZincMappingViewZincWidget::draw()
     fieldModule.beginChange();
         OpenCMISS::Zinc::Fielditerator fielditer = fieldModule.createFielditerator();
         OpenCMISS::Zinc::Field field = fielditer.next();
-        OpenCMISS::Zinc::Field coordinates;
         while (field.isValid()) {
             if (field.isTypeCoordinate() && (field.getValueType() == OpenCMISS::Zinc::Field::VALUE_TYPE_REAL)
                     && (field.getNumberOfComponents() <= 3) && field.castFiniteElement().isValid()) {
-                coordinates = field.castFiniteElement();
+                mCoordinates = field.castFiniteElement();
                 mCoordinatesName=field.getName();
                 break;
             }
             field = fielditer.next();
         }
 
+        // create the mapped group, for map nodes
+
         mMappedSelectionGroup = fieldModule.createFieldGroup();
         mMappedSelectionGroup.setName("Mapped");
+
+        // Create and initialize display field and initialize it with empty strings
+
+        mDisplayField = fieldModule.createFieldStoredString();
+
+        OpenCMISS::Zinc::Nodeset nodeSet = fieldModule.findNodesetByFieldDomainType(OpenCMISS::Zinc::Field::DOMAIN_TYPE_NODES);
+        OpenCMISS::Zinc::Nodetemplate nodeTemplate = nodeSet.createNodetemplate();
+        nodeTemplate.defineField(mDisplayField);
+
+        OpenCMISS::Zinc::Fieldcache fieldCache = fieldModule.createFieldcache();
+
+        OpenCMISS::Zinc::Nodeiterator nodeIter = nodeSet.createNodeiterator();
+        OpenCMISS::Zinc::Node node;
+
+        while ((node = nodeIter.next()).isValid()) {
+            fieldCache.setNode(node);
+            node.merge(nodeTemplate);
+
+            mDisplayField.assignString(fieldCache,"");
+        }
+
+        // create magnitude field for isosurfaces
+
+        mMagnitude = fieldModule.createFieldMagnitude(mCoordinates);
+
+        mMagnitude.setManaged(true);
 
     fieldModule.endChange();
 
     scene.beginChange();
         OpenCMISS::Zinc::Materialmodule materialModule = scene.getMaterialmodule();
 
-        //Black lines
+        // Black lines
 
-        OpenCMISS::Zinc::GraphicsLines lines = scene.createGraphicsLines();
-
-        lines.setCoordinateField(coordinates);
-        lines.setMaterial(materialModule.findMaterialByName("black"));
+        mLines = scene.createGraphicsLines();
+        mLines.setCoordinateField(mCoordinates);
+        mLines.setMaterial(materialModule.findMaterialByName("black"));
 
         // Green spheres limiting our scene
 
         mNodePoints = scene.createGraphicsPoints();
 
-        mNodePoints.setCoordinateField(coordinates);
+        mNodePoints.setCoordinateField(mCoordinates);
         mNodePoints.setFieldDomainType(OpenCMISS::Zinc::Field::DOMAIN_TYPE_NODES);
         mNodePoints.setMaterial(materialModule.findMaterialByName("grey"));
-
 
         // Size of our green spheres
 
@@ -363,7 +485,7 @@ void CellMLZincMappingViewZincWidget::draw()
 
         mMappedPoints = scene.createGraphicsPoints();
         mMappedPoints.setFieldDomainType(OpenCMISS::Zinc::Field::DOMAIN_TYPE_NODES);
-        mMappedPoints.setCoordinateField(coordinates);
+        mMappedPoints.setCoordinateField(mCoordinates);
         mMappedPoints.setSubgroupField(mMappedSelectionGroup);
 
         mMappedPoints.setMaterial(materialModule.findMaterialByName("green"));
@@ -375,6 +497,58 @@ void CellMLZincMappingViewZincWidget::draw()
         pointAttr.setGlyphShapeType(OpenCMISS::Zinc::Glyph::SHAPE_TYPE_SPHERE);
 
         scene.moveGraphicsBefore(mMappedPoints, mNodePoints);
+
+        // create label points
+
+        mLabelPoints = scene.createGraphicsPoints();
+        mLabelPoints.setFieldDomainType(OpenCMISS::Zinc::Field::DOMAIN_TYPE_NODES);
+        mLabelPoints.setCoordinateField(mCoordinates);
+
+        mLabelPoints.setMaterial(materialModule.findMaterialByName("black"));
+        mLabelPoints.setSelectedMaterial(materialModule.findMaterialByName("black"));
+
+        pointAttr = mLabelPoints.getGraphicspointattributes();
+
+        pointAttr.setGlyphShapeType(OpenCMISS::Zinc::Glyph::SHAPE_TYPE_NONE);
+
+        pointAttr.setLabelField(mDisplayField);
+        double dist = 0.75;
+        pointAttr.setLabelOffset(3,&dist);
+
+        // Axes
+
+        mAxes = scene.createGraphicsPoints();
+
+        mAxes.setFieldDomainType(OpenCMISS::Zinc::Field::DOMAIN_TYPE_POINT);
+        mAxes.setMaterial(materialModule.findMaterialByName("blue"));
+
+        // usefull with devicePixelRatioChanged
+        //mAxesFontPointSize = axes.getGraphicspointattributes().getFont().getPointSize();
+
+        // Surfaces
+
+        mSurfaces = scene.createGraphicsSurfaces();
+        mSurfaces.setCoordinateField(mCoordinates);
+
+        mSurfaces.setMaterial(mZincContext.getMaterialmodule().findMaterialByName("white"));
+
+        // Isosurfaces
+
+        OpenCMISS::Zinc::Tessellation tessellation = mZincContext.getTessellationmodule().createTessellation();
+        int intValue = 8;
+
+        tessellation.setManaged(true);
+        tessellation.setMinimumDivisions(1, &intValue);
+
+        mIsosurfaces = scene.createGraphicsContours();
+        mIsosurfaces.setCoordinateField(mCoordinates);
+
+        double doubleValue = 1.0;
+
+        mIsosurfaces.setIsoscalarField(mMagnitude);
+        mIsosurfaces.setListIsovalues(1, &doubleValue);
+        mIsosurfaces.setMaterial(mZincContext.getMaterialmodule().findMaterialByName("gold"));
+        mIsosurfaces.setTessellation(tessellation);
 
     scene.endChange();
 
@@ -395,6 +569,54 @@ void CellMLZincMappingViewZincWidget::draw()
 
     mEditingWidget->setWheelPosition(nodeSize);
     setNodeSizes(nodeSize);
+}
+
+//==============================================================================
+
+void CellMLZincMappingViewZincWidget::showHideGraphics(GraphicsType pGraphicsType)
+{
+    // Show/hide graphics on the scene of our default region
+
+    OpenCMISS::Zinc::Region region = mZincContext.getDefaultRegion();
+    OpenCMISS::Zinc::Scene scene = region.getScene();
+
+    scene.beginChange();
+        // Axes
+
+        if (   (pGraphicsType == GraphicsType::All)
+            || (pGraphicsType == GraphicsType::Axes)) {
+            mAxes.setVisibilityFlag(mActionAxes->isChecked());
+        }
+
+        // Lines
+
+        if (   (pGraphicsType == GraphicsType::All)
+            || (pGraphicsType == GraphicsType::Lines)) {
+            mLines.setVisibilityFlag(mActionLines->isChecked());
+        }
+
+        // Surfaces
+
+        if (   (pGraphicsType == GraphicsType::All)
+            || (pGraphicsType == GraphicsType::Surfaces)) {
+            mSurfaces.setVisibilityFlag(mActionSurfaces->isChecked());
+        }
+
+        // Isosurfaces
+
+        if (   (pGraphicsType == GraphicsType::All)
+            || (pGraphicsType == GraphicsType::Isosurfaces)) {
+            mIsosurfaces.setVisibilityFlag(mActionIsosurfaces->isChecked());
+        }
+
+        // Labels
+
+        if (   (pGraphicsType == GraphicsType::All)
+            || (pGraphicsType == GraphicsType::Label)) {
+            mLabelPoints.setVisibilityFlag(mActionLabel->isChecked());
+        }
+
+    scene.endChange();
 }
 
 //==============================================================================
@@ -482,17 +704,21 @@ void CellMLZincMappingViewZincWidget:: setNodeSizes(int pSize) {
     scene.beginChange();
         mNodePoints.getGraphicspointattributes().setBaseSize(1, &mNodeSize);
         mMappedPoints.getGraphicspointattributes().setBaseSize(1, &mNodeSize);
+        mLabelPoints.getGraphicspointattributes().setBaseSize(1, &mNodeSize);
     scene.endChange();
 }
 
 //==============================================================================
 
-void CellMLZincMappingViewZincWidget::eraseNode(int pId)
-{   
-    if (pId==-1) {
-        pId = mIdSelectedNode;
-    }
+void CellMLZincMappingViewZincWidget::eraseNodeSlot()
+{
+    eraseNode(mIdSelectedNode);
+}
 
+//==============================================================================
+
+void CellMLZincMappingViewZincWidget::eraseNode(int pId)
+{
     mEditingWidget->eraseNodeValue(pId);
 
     // select and highlight the current node
@@ -512,12 +738,68 @@ void CellMLZincMappingViewZincWidget::eraseNode(int pId)
             OpenCMISS::Zinc::NodesetGroup nodesetGroup = nodeGroupField.getNodesetGroup();
             nodesetGroup.removeNode(node);
 
+            OpenCMISS::Zinc::Nodeset nodeSet = fieldModule.findNodesetByFieldDomainType(OpenCMISS::Zinc::Field::DOMAIN_TYPE_NODES);
+            OpenCMISS::Zinc::Nodetemplate nodeTemplate = nodeSet.createNodetemplate();
+            nodeTemplate.defineField(mDisplayField);
+
+            OpenCMISS::Zinc::Fieldcache fieldCache = fieldModule.createFieldcache();
+
+            fieldCache.setNode(node);
+            node.merge(nodeTemplate);
+
+            mDisplayField.assignString(fieldCache,"");
+
         } else {
             if (mMappedSelectionGroup.isValid()) {
                 mZincContext.getDefaultRegion().getScene().setSelectionField(OpenCMISS::Zinc::Field());
             }
         }
     fieldModule.endChange();
+}
+
+//==============================================================================
+
+void CellMLZincMappingViewZincWidget::actionAxesTriggered()
+{
+    // Show/hide our axes
+
+    showHideGraphics(GraphicsType::Axes);
+}
+
+//==============================================================================
+
+void CellMLZincMappingViewZincWidget::actionLinesTriggered()
+{
+    // Show/hide our lines
+
+    showHideGraphics(GraphicsType::Lines);
+}
+
+//==============================================================================
+
+void CellMLZincMappingViewZincWidget::actionSurfacesTriggered()
+{
+    // Show/hide our surfaces
+
+    showHideGraphics(GraphicsType::Surfaces);
+}
+
+//==============================================================================
+
+void CellMLZincMappingViewZincWidget::actionIsosurfacesTriggered()
+{
+    // Show/hide our isosurfaces
+
+    showHideGraphics(GraphicsType::Isosurfaces);
+}
+
+//==============================================================================
+
+void CellMLZincMappingViewZincWidget::actionLabelTriggered()
+{
+    // Show/hide our isosurfaces
+
+    showHideGraphics(GraphicsType::Label);
 }
 
 //==============================================================================
